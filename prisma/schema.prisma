@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Una sola tabla: la app no guarda nada del usuario (sin login, acuerdo del v1),
+// solo la ventana de 7 días de titulares. La purga la hace cada corrida de /api/sync.
+model Article {
+  id String @id @default(cuid())
+
+  // URL ya limpia de parámetros de rastreo. Es la llave real de deduplicado:
+  // dos feeds que traen la misma nota chocan aquí y el upsert la deja en una.
+  url String @unique
+
+  // Titular normalizado (minúsculas, espacios colapsados). Segundo criterio de
+  // deduplicado, para cuando dos medios publican el mismo titular en URLs propias.
+  titleKey String
+
+  title    String
+  summary  String @default("")
+
+  sourceId   String
+  sourceName String
+  category   String
+  region     String
+  lang       String
+
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+
+  // El feed se lee siempre en orden cronológico y recortado por fecha.
+  @@index([publishedAt])
+  @@index([titleKey])
+  @@index([category])
+}

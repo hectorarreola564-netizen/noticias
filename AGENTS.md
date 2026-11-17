@@ -2,6 +2,23 @@
 
 Project-level instructions for coding agents working in this repo.
 
+## El proyecto
+
+Lector personal de noticias (PWA). Next.js en Vercel, Supabase para los titulares y
+GitHub Actions como cron cada 15 minutos. Ver el [README](./README.md) para el
+despliegue y [`.scratch/news-aggregator/spec.md`](./.scratch/news-aggregator/spec.md)
+para el alcance y las decisiones ya cerradas.
+
+Dos reglas que no se negocian:
+
+1. **Costo de operación $0.** Cualquier propuesta que implique factura mensual está
+   descartada de entrada, por decisión del dueño. Ninguna cuenta lleva tarjeta.
+2. **Solo titular, resumen, medio y enlace.** Nunca copiar ni reescribir el cuerpo de
+   un artículo: es lo que separa este agregador de una infracción de copyright.
+
+La lógica pura de ingesta (`src/lib/rss.ts`, `src/lib/normalize.ts`) está cubierta
+por tests y se construyó test-first. Al tocarla, empieza por el test.
+
 ## Agent skills
 
 ### Issue tracker

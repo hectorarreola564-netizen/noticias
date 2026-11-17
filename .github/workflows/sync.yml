@@ -1,0 +1,28 @@
+# Cron de la ingesta. GitHub Actions es el reloj porque en repos públicos no tiene
+# límite de minutos, mientras que el cron de Vercel en plan gratuito solo corre una
+# vez al día. Ver el acuerdo en .scratch/news-aggregator/spec.md.
+name: Sincronizar noticias
+
+on:
+  schedule:
+    # Cada 15 minutos. GitHub encola los cron en horas pico, así que puede correr
+    # con unos minutos de retraso: para noticias es irrelevante.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # permite forzarla a mano desde la pestaña Actions
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar a /api/sync
+        run: |
+          codigo=$(curl -s -o respuesta.json -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/sync" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 120)
+          cat respuesta.json
+          echo
+          if [ "$codigo" != "200" ]; then
+            echo "::error::La sincronización respondió $codigo"
+            exit 1
+          fi

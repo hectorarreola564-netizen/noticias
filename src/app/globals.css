@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fondo: #0b0d10;
+  --color-tarjeta: #14181d;
+  --color-borde: #232a32;
+  --color-texto: #e8eaed;
+  --color-apagado: #9aa4af;
+  --color-acento: #4a9eff;
+}
+
+html {
+  color-scheme: dark;
+  /* Evita que iOS reescale el texto al girar el teléfono. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  /* Respeta la muesca y la barra inferior del iPhone cuando corre como PWA. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
