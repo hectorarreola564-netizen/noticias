@@ -39,13 +39,37 @@ Para verificar que las fuentes responden y el parseo funciona, **sin base de dat
 npx tsx scripts/check-feeds.ts
 ```
 
+## Desplegar con el asistente (recomendado)
+
+Las secciones 2 a 5 de abajo son el procedimiento manual completo. Si prefieres
+que algo te lleve de la mano, hay un asistente que recorre esos cuatro pasos
+etapa por etapa: abre cada página en el navegador, te pide solo los datos que
+únicamente tú puedes obtener, y hace y verifica por su cuenta todo lo demás
+(migración, ingesta, commit, push y comprobación de que la app responde).
+
+```bash
+./scripts/desplegar.sh
+```
+
+Es idempotente: si algo falla a medio camino, corrígelo y vuelve a correrlo —
+reutiliza lo que ya quedó guardado en `.env` y no repite trabajo hecho.
+
 ## 2. Base de datos (Supabase)
 
 1. Crea un proyecto gratis en [supabase.com](https://supabase.com).
-2. En **Project Settings → Database → Connection string**, copia la de
-   **Connection pooling** (puerto `6543`), no la directa: Vercel abre y cierra
-   conexiones en cada request.
-3. Copia `.env.example` a `.env` y pega la cadena en `DATABASE_URL`.
+2. En el botón **Connect** (o **Project Settings → Database**) hay varias cadenas
+   de conexión. Hacen falta **dos distintas**, y confundirlas es la causa más
+   común de que falle el siguiente paso:
+
+   | Cadena | Puerto | Para qué |
+   | --- | --- | --- |
+   | **Session pooler** | `5432` | Crear la tabla desde tu máquina |
+   | **Transaction pooler** | `6543` | La app corriendo en Vercel |
+
+   El pooler de transacciones no soporta los comandos DDL que Prisma necesita
+   para crear tablas, así que la migración **tiene** que correr sobre la de 5432.
+3. Copia `.env.example` a `.env` y pega la cadena **Session pooler (5432)** en
+   `DATABASE_URL`. La de 6543 va en Vercel (sección 3), no aquí.
 4. Crea la tabla:
 
 ```bash
