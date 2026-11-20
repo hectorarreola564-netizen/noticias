@@ -8,6 +8,8 @@ type Props = {
   imageUrl: string | null;
   /** La primera nota del día con foto se muestra en grande, como portada. */
   destacada?: boolean;
+  /** Cuántos medios cubren el mismo hecho. Solo se muestra si son varios. */
+  medios?: number;
 };
 
 function hora(date: Date): string {
@@ -18,15 +20,26 @@ function hora(date: Date): string {
   }).format(date);
 }
 
-function Meta({ sourceName, publishedAt, lang }: Pick<Props, "sourceName" | "publishedAt" | "lang">) {
+function Meta({
+  sourceName,
+  publishedAt,
+  lang,
+  medios,
+}: Pick<Props, "sourceName" | "publishedAt" | "lang" | "medios">) {
   return (
-    <div className="flex items-center gap-2 text-xs text-(--color-apagado)">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-apagado)">
       <span className="font-semibold text-(--color-acento)">{sourceName}</span>
       <span aria-hidden>·</span>
       <time dateTime={publishedAt.toISOString()}>{hora(publishedAt)}</time>
       {lang === "en" && (
         <span className="rounded-full border border-(--color-borde) px-1.5 py-px text-[10px] font-medium">
           EN
+        </span>
+      )}
+      {medios !== undefined && medios > 1 && (
+        // El número es la razón por la que la nota está arriba: lo cubren varios.
+        <span className="rounded-full bg-(--color-acento)/15 px-2 py-px text-[10px] font-semibold text-(--color-acento)">
+          {medios} medios
         </span>
       )}
     </div>

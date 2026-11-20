@@ -2,7 +2,7 @@ import { ArticleCard } from "@/components/ArticleCard";
 import { DayNav } from "@/components/DayNav";
 import { FilterChips } from "@/components/FilterChips";
 import { PushButton } from "@/components/PushButton";
-import { articlesFor, clampOffset } from "@/lib/query";
+import { clampOffset, portadaFor, type Portada } from "@/lib/query";
 
 type Props = {
   searchParams: Promise<{ c?: string; d?: string }>;
@@ -13,10 +13,10 @@ export default async function Home({ searchParams }: Props) {
   const day = clampOffset(params.d);
   const category = params.c ?? "todo";
 
-  let articles: Awaited<ReturnType<typeof articlesFor>> = [];
+  let portada: Portada = { destacadas: [], resto: [] };
   let dbError: string | null = null;
   try {
-    articles = await articlesFor(day, category);
+    portada = await portadaFor(day, category);
   } catch (error) {
     // Antes de conectar Supabase la portada no debe reventar con un stack trace:
     // decir qué falta es más útil que un error 500.
@@ -49,7 +49,7 @@ export default async function Home({ searchParams }: Props) {
         </div>
       )}
 
-      {!dbError && articles.length === 0 && (
+      {!dbError && portada.destacadas.length === 0 && portada.resto.length === 0 && (
         <div className="rounded-lg border border-(--color-borde) bg-(--color-tarjeta) p-4 text-sm">
           <p className="font-semibold">Nada todavía para este día.</p>
           <p className="mt-1 text-(--color-apagado)">
@@ -58,23 +58,48 @@ export default async function Home({ searchParams }: Props) {
         </div>
       )}
 
-      <div>
-        {articles.map((a, i) => (
-          <ArticleCard
-            key={a.id}
-            title={a.title}
-            url={a.url}
-            summary={a.summary}
-            sourceName={a.sourceName}
-            publishedAt={a.publishedAt}
-            lang={a.lang}
-            imageUrl={a.imageUrl}
-            // La primera del día entra en grande: le da un punto de entrada
-            // visual al feed en vez de abrir con una lista plana.
-            destacada={i === 0}
-          />
-        ))}
-      </div>
+      {portada.destacadas.length > 0 && (
+        <section>
+          <h2 className="pt-2 pb-1 text-xs font-bold tracking-widest text-(--color-apagado) uppercase">
+            Lo importante
+          </h2>
+          {portada.destacadas.map((d, i) => (
+            <ArticleCard
+              key={d.articulo.id}
+              title={d.articulo.title}
+              url={d.articulo.url}
+              summary={d.articulo.summary}
+              sourceName={d.articulo.sourceName}
+              publishedAt={d.articulo.publishedAt}
+              lang={d.articulo.lang}
+              imageUrl={d.articulo.imageUrl}
+              medios={d.medios}
+              // Solo la primera va en grande; varias seguidas cansan la vista.
+              destacada={i === 0}
+            />
+          ))}
+        </section>
+      )}
+
+      {portada.resto.length > 0 && (
+        <section>
+          <h2 className="pt-5 pb-1 text-xs font-bold tracking-widest text-(--color-apagado) uppercase">
+            Lo más reciente
+          </h2>
+          {portada.resto.map((a) => (
+            <ArticleCard
+              key={a.id}
+              title={a.title}
+              url={a.url}
+              summary={a.summary}
+              sourceName={a.sourceName}
+              publishedAt={a.publishedAt}
+              lang={a.lang}
+              imageUrl={a.imageUrl}
+            />
+          ))}
+        </section>
+      )}
     </main>
   );
 }

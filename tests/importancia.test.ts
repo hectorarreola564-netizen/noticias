@@ -3,6 +3,7 @@ import {
   agruparPorHecho,
   esImportante,
   historiaMasImportante,
+  historiasDestacadas,
   tokensSignificativos,
   type NotaParaEvaluar,
 } from "@/lib/importancia";
@@ -96,5 +97,38 @@ describe("historiaMasImportante", () => {
     ]);
     expect(h).not.toBeNull();
     expect(h!.fuentes.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("historiasDestacadas", () => {
+  it("ordena por número de medios y corta en el máximo pedido", () => {
+    const notas = [
+      // Hecho A: 3 medios
+      nota("Sismo magnitud 7 sacude Oaxaca madrugada", "a"),
+      nota("Sismo magnitud 7 Oaxaca madrugada reporte", "b"),
+      nota("Oaxaca: sismo magnitud 7 esta madrugada", "c"),
+      // Hecho B: 2 medios
+      nota("Peso mexicano cierra estable frente dólar", "d"),
+      nota("Peso mexicano estable frente dólar jornada", "e"),
+    ];
+    const d = historiasDestacadas(notas, { max: 2 });
+    expect(d).toHaveLength(2);
+    expect(d[0].fuentes.length).toBe(3);
+    expect(d[1].fuentes.length).toBe(2);
+  });
+
+  it("deja fuera lo que publicó un solo medio", () => {
+    const d = historiasDestacadas([nota("Noticia que nadie más recogió hoy", "a")]);
+    expect(d).toHaveLength(0);
+  });
+
+  it("baja el umbral respecto a las notificaciones", () => {
+    // Dos medios no bastan para sonar el teléfono, pero sí para encabezar.
+    const notas = [
+      nota("Banxico eleva tasa interés inflación octubre", "a"),
+      nota("Banxico eleva tasa interés por inflación", "b"),
+    ];
+    expect(historiasDestacadas(notas)).toHaveLength(1);
+    expect(esImportante(agruparPorHecho(notas)[0])).toBe(false);
   });
 });

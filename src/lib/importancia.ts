@@ -160,3 +160,27 @@ export function historiaMasImportante(notas: NotaParaEvaluar[]): Historia | null
     return +b.notas[0].publishedAt - +a.notas[0].publishedAt;
   })[0];
 }
+
+/**
+ * Historias para la sección destacada de la portada.
+ *
+ * El umbral es más bajo que el de las notificaciones a propósito: un aviso
+ * interrumpe y debe ser excepcional, mientras que encabezar el feed solo ordena
+ * lo que el usuario ya decidió mirar. Dos medios bastan para merecer el primer
+ * vistazo; cuatro, para sonar el teléfono.
+ */
+export function historiasDestacadas(
+  notas: NotaParaEvaluar[],
+  { minFuentes = 2, max = 4 }: { minFuentes?: number; max?: number } = {},
+): Historia[] {
+  return agruparPorHecho(notas)
+    .filter((h) => h.fuentes.length >= minFuentes)
+    .sort((a, b) => {
+      if (b.fuentes.length !== a.fuentes.length) return b.fuentes.length - a.fuentes.length;
+      if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;
+      // A igualdad, lo más reciente primero: entre dos hechos igual de cubiertos
+      // el usuario quiere el de hoy, no el de ayer.
+      return +b.notas[0].publishedAt - +a.notas[0].publishedAt;
+    })
+    .slice(0, max);
+}
