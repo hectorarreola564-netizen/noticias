@@ -1,6 +1,7 @@
 import { ArticleCard } from "@/components/ArticleCard";
 import { DayNav } from "@/components/DayNav";
 import { FilterChips } from "@/components/FilterChips";
+import { PushButton } from "@/components/PushButton";
 import { articlesFor, clampOffset } from "@/lib/query";
 
 type Props = {
@@ -24,12 +25,17 @@ export default async function Home({ searchParams }: Props) {
 
   return (
     <main>
-      <header className="pt-6">
-        <h1 className="text-2xl font-bold tracking-tight">Noticias</h1>
-      </header>
+      {/* Cabecera fija: al desplazarse, los filtros y los días siguen al alcance
+          del pulgar en lugar de obligar a subir hasta arriba. */}
+      <div className="sticky top-0 z-10 -mx-4 bg-(--color-fondo)/85 px-4 backdrop-blur-xl">
+        <header className="flex items-baseline justify-between pt-6">
+          <h1 className="text-2xl font-bold tracking-tight">Noticias</h1>
+          <PushButton vapidKey={process.env.VAPID_PUBLIC_KEY ?? ""} />
+        </header>
 
-      <FilterChips active={category} day={day} />
-      <DayNav day={day} category={category} />
+        <FilterChips active={category} day={day} />
+        <DayNav day={day} category={category} />
+      </div>
 
       {dbError && (
         <div className="rounded-lg border border-(--color-borde) bg-(--color-tarjeta) p-4 text-sm">
@@ -53,7 +59,7 @@ export default async function Home({ searchParams }: Props) {
       )}
 
       <div>
-        {articles.map((a) => (
+        {articles.map((a, i) => (
           <ArticleCard
             key={a.id}
             title={a.title}
@@ -62,6 +68,10 @@ export default async function Home({ searchParams }: Props) {
             sourceName={a.sourceName}
             publishedAt={a.publishedAt}
             lang={a.lang}
+            imageUrl={a.imageUrl}
+            // La primera del día entra en grande: le da un punto de entrada
+            // visual al feed en vez de abrir con una lista plana.
+            destacada={i === 0}
           />
         ))}
       </div>

@@ -23,6 +23,11 @@ model Article {
   title    String
   summary  String @default("")
 
+  // Foto de la nota, tomada del módulo Media RSS. Opcional a propósito: hay
+  // medios (La Jornada) que no publican foto por nota, y la tarjeta se diseña
+  // para verse bien sin ella.
+  imageUrl String?
+
   sourceId   String
   sourceName String
   category   String
@@ -36,4 +41,27 @@ model Article {
   @@index([publishedAt])
   @@index([titleKey])
   @@index([category])
+}
+
+/**
+ * Un navegador suscrito a las notificaciones. En iOS solo existe cuando la app
+ * está instalada en la pantalla de inicio: Safari no permite Web Push desde una
+ * pestaña normal.
+ */
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  // Se marca cuando el servicio de push responde que caducó, para dejar de
+  // intentarlo en cada sincronización.
+  failedAt  DateTime?
+}
+
+/** Estado interno de la app. Hoy solo guarda cuándo se mandó el último aviso. */
+model Ajuste {
+  clave String   @id
+  valor String
+  actualizadoAt DateTime @updatedAt
 }

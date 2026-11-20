@@ -41,6 +41,7 @@ describe("parseFeed", () => {
       region: "mx",
       lang: "es",
       publishedAt: new Date("2026-11-16T10:19:11.000Z"),
+      imageUrl: null,
     });
   });
 
@@ -183,3 +184,74 @@ describe("parseFeed", () => {
   });
 });
 
+
+describe("parseFeed · imágenes", () => {
+  const fuente: FeedSource = { ...jornada, id: "x", name: "X" };
+
+  function conItem(extra: string) {
+    return `<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel><item>
+    <title>Una nota</title>
+    <link>https://ejemplo.com/n/1</link>
+    <pubDate>Mon, 16 Nov 2026 10:19:11 GMT</pubDate>
+    ${extra}
+  </item></channel>
+</rss>`;
+  }
+
+  it("toma la url de media:content", () => {
+    // Formato real de El Financiero e Infobae.
+    const xml = conItem('<media:content url="https://cdn.ejemplo.com/foto.png" type="image/png" width="1776"/>');
+    expect(parseFeed(xml, fuente)[0].imageUrl).toBe("https://cdn.ejemplo.com/foto.png");
+  });
+
+  it("toma la url de media:thumbnail", () => {
+    // Formato real de BBC Mundo.
+    const xml = conItem('<media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/a.jpg"/>');
+    expect(parseFeed(xml, fuente)[0].imageUrl).toBe("https://ichef.bbci.co.uk/a.jpg");
+  });
+
+  it("ignora los adjuntos que no son imagen", () => {
+    const xml = conItem('<enclosure url="https://ejemplo.com/audio.mp3" type="audio/mpeg"/>');
+    expect(parseFeed(xml, fuente)[0].imageUrl).toBeNull();
+  });
+
+  it("descarta imágenes en http para no romper la página segura", () => {
+    const xml = conItem('<media:content url="http://inseguro.com/foto.jpg" type="image/jpeg"/>');
+    expect(parseFeed(xml, fuente)[0].imageUrl).toBeNull();
+  });
+
+  it("deja la noticia sin imagen cuando el feed no trae ninguna", () => {
+    // Caso La Jornada: la nota es válida, solo que sin foto.
+    expect(parseFeed(conItem(""), fuente)[0].imageUrl).toBeNull();
+  });
+});
+
+describe("parseFeed · entidades HTML", () => {
+  const fuente: FeedSource = { ...jornada, id: "mw", name: "MarketWatch", lang: "en" };
+
+  function conTitulo(titulo: string) {
+    return `<?xml version="1.0"?><rss version="2.0"><channel><item>
+      <title><![CDATA[${titulo}]]></title>
+      <link>https://ejemplo.com/n/2</link>
+      <pubDate>Mon, 16 Nov 2026 10:19:11 GMT</pubDate>
+    </item></channel></rss>`;
+  }
+
+  it("decodifica entidades hexadecimales del titular", () => {
+    // Caso real de MarketWatch: el apóstrofo tipográfico llega como &#x2019;
+    const xml = conTitulo("Here&#x2019;s what&#x2019;s proven");
+    expect(parseFeed(xml, fuente)[0].title).toBe("Here’s what’s proven");
+  });
+
+  it("decodifica entidades decimales y con nombre", () => {
+    const xml = conTitulo("Ca&#241;o &amp; furia &lt;hoy&gt;");
+    expect(parseFeed(xml, fuente)[0].title).toBe("Caño & furia <hoy>");
+  });
+
+  it("deja intacto un titular sin entidades", () => {
+    const xml = conTitulo("Un titular normal");
+    expect(parseFeed(xml, fuente)[0].title).toBe("Un titular normal");
+  });
+});

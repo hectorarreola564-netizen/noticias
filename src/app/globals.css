@@ -21,3 +21,12 @@ body {
   /* Respeta la muesca y la barra inferior del iPhone cuando corre como PWA. */
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Las filas de filtros y días se desplazan de lado; la barra del navegador
+   estorba visualmente en una app que se usa con el pulgar. */
+nav::-webkit-scrollbar {
+  display: none;
+}
+nav {
+  scrollbar-width: none;
+}

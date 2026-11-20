@@ -1,3 +1,4 @@
+import { avisarSiToca } from "@/lib/avisos";
 import { ingestAll } from "@/lib/ingest";
 
 // La ingesta lee 15 feeds en paralelo con 12s de tope cada uno; 60s es holgado y es
@@ -22,8 +23,10 @@ export async function POST(request: Request) {
   const started = Date.now();
   try {
     const report = await ingestAll();
+    const { aviso } = await avisarSiToca(report.inserted > 0);
     return Response.json({
       ok: true,
+      aviso,
       ms: Date.now() - started,
       fetched: report.fetched,
       inserted: report.inserted,

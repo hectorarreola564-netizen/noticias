@@ -96,6 +96,7 @@ export async function ingestAll(now: Date = new Date()): Promise<IngestReport> {
       region: a.region,
       lang: a.lang,
       publishedAt: a.publishedAt,
+      imageUrl: a.imageUrl,
     })),
     skipDuplicates: true,
   });

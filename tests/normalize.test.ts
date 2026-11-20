@@ -12,6 +12,7 @@ function articulo(overrides: Partial<ArticleInput> = {}): ArticleInput {
     category: "politica",
     region: "mx",
     lang: "es",
+    imageUrl: null,
     publishedAt: new Date("2026-11-16T10:00:00Z"),
     ...overrides,
   };
