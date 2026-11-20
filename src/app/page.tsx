@@ -35,8 +35,11 @@ export default async function Home({ searchParams }: Props) {
         <div className="rounded-lg border border-(--color-borde) bg-(--color-tarjeta) p-4 text-sm">
           <p className="font-semibold">No hay conexión a la base de datos.</p>
           <p className="mt-1 text-(--color-apagado)">
-            Falta configurar <code>DATABASE_URL</code>. Ver el paso 2 del README.
+            Revisa <code>DATABASE_URL</code> (paso 2 del README). Error recibido:
           </p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-(--color-apagado)">
+            {dbError}
+          </pre>
         </div>
       )}
 
