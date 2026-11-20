@@ -1,48 +1,77 @@
+import { historiaMasImportante } from "@/lib/importancia";
 import { prisma } from "@/lib/prisma";
 import { enviarAviso } from "@/lib/push";
 
 /**
- * Cuánto debe pasar entre dos avisos. La sincronización corre cada 15 minutos;
- * avisar en cada una serían casi cien notificaciones al día, que es exactamente
- * lo que lleva a silenciar una app. Una cada dos horas mantiene el valor de
- * enterarse sin volverse ruido.
+ * Solo se avisa de hechos que varios medios independientes cubrieron a la vez
+ * (ver src/lib/importancia.ts). No se avisa de "lo más reciente": una
+ * notificación interrumpe, y lo último publicado casi nunca merece interrumpir.
  */
-const HORAS_ENTRE_AVISOS = 2;
-const CLAVE = "ultimoAviso";
 
-/**
- * Avisa de la nota más reciente, si toca. Devuelve qué pasó para que la respuesta
- * de /api/sync lo deje ver sin tener que mirar logs.
- */
-export async function avisarSiToca(hayNuevas: boolean) {
-  if (!hayNuevas) return { aviso: "sin notas nuevas" as const };
+/** Ventana de noticias que se considera para decidir qué es importante. */
+const HORAS_VENTANA = 6;
+/** Piso entre dos avisos, para que una tanda de coberturas no dispare varios. */
+const MINUTOS_ENTRE_AVISOS = 45;
+/** Cuántas historias ya avisadas se recuerdan, para no repetir la misma. */
+const MEMORIA = 60;
 
-  const ultimo = await prisma.ajuste.findUnique({ where: { clave: CLAVE } });
+const CLAVE_ULTIMO = "ultimoAviso";
+const CLAVE_HISTORIAS = "historiasAvisadas";
+
+async function leer(clave: string): Promise<string | null> {
+  const fila = await prisma.ajuste.findUnique({ where: { clave } });
+  return fila?.valor ?? null;
+}
+
+async function guardar(clave: string, valor: string) {
+  await prisma.ajuste.upsert({
+    where: { clave },
+    create: { clave, valor },
+    update: { valor },
+  });
+}
+
+export type ResultadoAviso = { aviso: string };
+
+export async function avisarSiToca(hayNuevas: boolean): Promise<ResultadoAviso> {
+  if (!hayNuevas) return { aviso: "sin notas nuevas" };
+
+  const ultimo = await leer(CLAVE_ULTIMO);
   if (ultimo) {
-    const transcurridas = (Date.now() - new Date(ultimo.valor).getTime()) / 36e5;
-    if (transcurridas < HORAS_ENTRE_AVISOS) {
-      return { aviso: `en pausa, faltan ${(HORAS_ENTRE_AVISOS - transcurridas).toFixed(1)} h` };
+    const minutos = (Date.now() - new Date(ultimo).getTime()) / 60000;
+    if (minutos < MINUTOS_ENTRE_AVISOS) {
+      return { aviso: `en pausa (${Math.round(MINUTOS_ENTRE_AVISOS - minutos)} min)` };
     }
   }
 
-  const nota = await prisma.article.findFirst({ orderBy: { publishedAt: "desc" } });
-  if (!nota) return { aviso: "sin notas que anunciar" as const };
+  const desde = new Date(Date.now() - HORAS_VENTANA * 60 * 60 * 1000);
+  const notas = await prisma.article.findMany({
+    where: { publishedAt: { gte: desde } },
+    select: { id: true, title: true, sourceId: true, sourceName: true, publishedAt: true },
+  });
+
+  const historia = historiaMasImportante(notas);
+  if (!historia) return { aviso: "nada lo bastante importante" };
+
+  const previas: string[] = JSON.parse((await leer(CLAVE_HISTORIAS)) ?? "[]");
+  if (previas.includes(historia.clave)) {
+    return { aviso: "esa historia ya se avisó" };
+  }
 
   const { enviados, borrados } = await enviarAviso({
-    title: nota.sourceName,
-    body: nota.title,
+    // El cuerpo lleva el titular; el título dice cuántos medios lo respaldan,
+    // que es la razón por la que el aviso se consideró digno de interrumpir.
+    title: `${historia.fuentes.length} medios lo cubren`,
+    body: historia.titular,
     url: "/",
   });
 
-  // Solo se marca si de verdad salió a alguien: si no hay nadie suscrito, no
-  // tiene sentido quemar la ventana de dos horas.
   if (enviados > 0) {
-    await prisma.ajuste.upsert({
-      where: { clave: CLAVE },
-      create: { clave: CLAVE, valor: new Date().toISOString() },
-      update: { valor: new Date().toISOString() },
-    });
+    await guardar(CLAVE_ULTIMO, new Date().toISOString());
+    await guardar(CLAVE_HISTORIAS, JSON.stringify([historia.clave, ...previas].slice(0, MEMORIA)));
   }
 
-  return { aviso: `enviados ${enviados}, suscripciones caducadas ${borrados}` };
+  return {
+    aviso: `"${historia.titular.slice(0, 60)}…" · ${historia.fuentes.length} medios · enviados ${enviados}, caducados ${borrados}`,
+  };
 }
