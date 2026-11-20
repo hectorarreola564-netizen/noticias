@@ -9,13 +9,18 @@ import {
 } from "@/lib/importancia";
 
 let n = 0;
-function nota(title: string, sourceId: string, minutos = 0): NotaParaEvaluar {
+function nota(
+  title: string,
+  sourceId: string,
+  { minutos = 0, category = "politica" }: { minutos?: number; category?: string } = {},
+): NotaParaEvaluar {
   n++;
   return {
     id: `a${n}`,
     title,
     sourceId,
     sourceName: sourceId,
+    category,
     publishedAt: new Date(Date.UTC(2026, 10, 20, 10, minutos)),
   };
 }
@@ -66,8 +71,18 @@ describe("esImportante", () => {
     expect(esImportante(base(["a", "b", "c"]))).toBe(false);
   });
 
-  it("basta con tres medios si el hecho es de ruptura", () => {
+  it("basta con tres medios si es de ruptura y toda la cobertura es seria", () => {
     expect(esImportante(base(["a", "b", "c"], "Última hora: terremoto sacude la capital"))).toBe(true);
+  });
+
+  it("el atajo por urgencia no aplica si hay portadas generales en la cobertura", () => {
+    // Caso real: cierre de una estación del metro por un desfile.
+    const notas = [
+      nota("Alerta: cierran estación Zócalo por desfile mañana", "a", { category: "general" }),
+      nota("Alerta cierran estación Zócalo por desfile", "b", { category: "general" }),
+      nota("Alerta: cierran la estación Zócalo por el desfile", "c", { category: "mercados" }),
+    ];
+    expect(esImportante(agruparPorHecho(notas)[0])).toBe(false);
   });
 
   it("una sola fuente nunca califica, aunque grite urgencia", () => {
@@ -111,7 +126,7 @@ describe("historiasDestacadas", () => {
       nota("Peso mexicano cierra estable frente dólar", "d"),
       nota("Peso mexicano estable frente dólar jornada", "e"),
     ];
-    const d = historiasDestacadas(notas, { max: 2 });
+    const d = historiasDestacadas(notas, { max: 2, minFuentes: 2 });
     expect(d).toHaveLength(2);
     expect(d[0].fuentes.length).toBe(3);
     expect(d[1].fuentes.length).toBe(2);
@@ -123,12 +138,38 @@ describe("historiasDestacadas", () => {
   });
 
   it("baja el umbral respecto a las notificaciones", () => {
-    // Dos medios no bastan para sonar el teléfono, pero sí para encabezar.
+    // Tres medios no bastan para sonar el teléfono, pero sí para encabezar.
     const notas = [
       nota("Banxico eleva tasa interés inflación octubre", "a"),
       nota("Banxico eleva tasa interés por inflación", "b"),
+      nota("Banxico eleva la tasa de interés por inflación", "c"),
     ];
     expect(historiasDestacadas(notas)).toHaveLength(1);
     expect(esImportante(agruparPorHecho(notas)[0])).toBe(false);
+  });
+});
+
+describe("respaldo de una sección seria", () => {
+  it("descarta lo que solo cubrieron portadas generales", () => {
+    // Caso real: tres portadas generales cubriendo el casco de un piloto.
+    const notas = ["infobae", "elpais", "excelsior", "milenio"].map((f) =>
+      nota("Checo Pérez estrena casco especial para el GP de Las Vegas", f, {
+        category: "general",
+      }),
+    );
+    const h = agruparPorHecho(notas)[0];
+    expect(h.fuentes.length).toBe(4);
+    expect(esImportante(h)).toBe(false);
+    expect(historiasDestacadas(notas)).toHaveLength(0);
+  });
+
+  it("acepta el mismo número de medios si una sección seria lo publicó", () => {
+    const notas = [
+      nota("Wall Street cae más de 2% por los datos de empleo", "a", { category: "general" }),
+      nota("Wall Street cae más de 2% tras datos de empleo", "b", { category: "general" }),
+      nota("Wall Street cae más de 2%: datos de empleo pesan", "c", { category: "general" }),
+      nota("Wall Street cae más de 2% por datos empleo", "d", { category: "mercados" }),
+    ];
+    expect(esImportante(agruparPorHecho(notas)[0])).toBe(true);
   });
 });

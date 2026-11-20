@@ -10,7 +10,7 @@ async function main() {
   const desde = new Date(Date.now() - 12 * 60 * 60 * 1000);
   const notas = await prisma.article.findMany({
     where: { publishedAt: { gte: desde } },
-    select: { id: true, title: true, sourceId: true, sourceName: true, publishedAt: true },
+    select: { id: true, title: true, sourceId: true, sourceName: true, category: true, publishedAt: true },
     orderBy: { publishedAt: "desc" },
   });
 

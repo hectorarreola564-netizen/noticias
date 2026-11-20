@@ -59,8 +59,21 @@ export type NotaParaEvaluar = {
   title: string;
   sourceId: string;
   sourceName: string;
+  /** Sección del medio de la que viene (ver src/lib/feeds.ts). */
+  category: string;
   publishedAt: Date;
 };
+
+/**
+ * Una nota publicada en la sección de política, mercados o internacional viene
+ * de una mesa que cubre temas serios; las de categoría "general" vienen de la
+ * portada del medio, donde conviven el gabinete y el casco de un piloto.
+ *
+ * Exigir que al menos un medio la haya publicado desde una sección seria separa
+ * "lo cubren todos porque importa" de "lo cubren todos porque da clics", sin
+ * necesidad de clasificar el contenido ni de pagar un modelo.
+ */
+const SECCIONES_SERIAS = new Set(["politica", "mercados", "internacional"]);
 
 export type Historia = {
   /** Identificador estable del hecho, para no avisar dos veces de lo mismo. */
@@ -69,6 +82,8 @@ export type Historia = {
   fuentes: string[];
   notas: NotaParaEvaluar[];
   urgente: boolean;
+  /** Si alguna de las coberturas vino de una sección seria. */
+  respaldoSerio: boolean;
 };
 
 /** Palabras con carga informativa de un titular, normalizadas sin acentos. */
@@ -76,7 +91,7 @@ export function tokensSignificativos(titulo: string): Set<string> {
   const limpio = titulo
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9ñ\s]/g, " ");
 
   const tokens = limpio
@@ -98,54 +113,112 @@ function compartidos(a: Set<string>, b: Set<string>): number {
 }
 
 /**
- * Agrupa las notas que hablan del mismo hecho. Dos notas caen en el mismo grupo
- * si sus titulares comparten suficientes palabras con carga; la agrupación es
- * transitiva, así que una cadena de coincidencias une toda la cobertura.
+ * Palabras que aparecen en demasiados titulares de la misma tanda no distinguen
+ * nada: "clima", "noviembre" o "viernes" salen en decenas de notas rutinarias.
+ * Se descartan por frecuencia, sin lista fija, porque cambian cada día.
+ */
+const UMBRAL_FRECUENCIA = 0.06;
+
+function tokensDistintivos(notas: NotaParaEvaluar[]): Set<string>[] {
+  const crudos = notas.map((n) => tokensSignificativos(n.title));
+
+  const frecuencia = new Map<string, number>();
+  for (const set of crudos) {
+    for (const token of set) frecuencia.set(token, (frecuencia.get(token) ?? 0) + 1);
+  }
+
+  // El piso evita que en tandas pequeñas el filtro se coma todo: una palabra
+  // que sale en 8 titulares o menos nunca es relleno, por chica que sea la tanda.
+  const tope = Math.max(8, Math.floor(notas.length * UMBRAL_FRECUENCIA));
+  return crudos.map((set) => {
+    const filtrado = new Set<string>();
+    for (const token of set) if ((frecuencia.get(token) ?? 0) <= tope) filtrado.add(token);
+    return filtrado;
+  });
+}
+
+/**
+ * Dos titulares hablan del mismo hecho si comparten suficientes palabras
+ * distintivas Y esas palabras son una fracción alta del titular más corto. La
+ * proporción es lo que evita que dos notas largas se unan por coincidencias
+ * sueltas.
+ */
+/**
+ * Calibrado con un barrido sobre 434 notas reales de 12 h (2026-11-20). Con
+ * 3 palabras exigidas casi nada agrupaba (405 historias de 434 notas, cero
+ * avisos); con proporción 0.2 volvían a aparecer grupos de 10 por coincidencias
+ * sueltas. 2 palabras y 0.3 deja 372 historias, grupo mayor de 7, y 21 hechos
+ * con dos o más medios detrás: suficiente para la portada y selectivo para los
+ * avisos.
+ */
+const MIN_TOKENS_COMPARTIDOS = 2;
+const MIN_PROPORCION = 0.3;
+
+function hablanDelMismoHecho(a: Set<string>, b: Set<string>): boolean {
+  const menor = Math.min(a.size, b.size);
+  if (menor === 0) return false;
+  const n = compartidos(a, b);
+  return n >= MIN_TOKENS_COMPARTIDOS && n / menor >= MIN_PROPORCION;
+}
+
+/**
+ * Agrupa las notas que hablan del mismo hecho.
+ *
+ * Deliberadamente SIN transitividad: antes, A se unía con B y B con C, y una
+ * cadena de coincidencias sueltas terminaba fundiendo 66 notas sin relación
+ * (pronósticos del clima de distintas ciudades) en un solo "hecho" con seis
+ * medios detrás. Ahora cada grupo tiene una nota semilla y solo entran las que
+ * se parecen A ELLA, así que un grupo no puede crecer por encadenamiento.
  */
 export function agruparPorHecho(notas: NotaParaEvaluar[]): Historia[] {
-  const tokens = notas.map((n) => tokensSignificativos(n.title));
-  const grupoDe = notas.map((_, i) => i);
+  const tokens = tokensDistintivos(notas);
+  const orden = notas
+    .map((n, i) => i)
+    .sort((x, y) => +notas[x].publishedAt - +notas[y].publishedAt);
 
-  function raiz(i: number): number {
-    while (grupoDe[i] !== i) i = grupoDe[i];
-    return i;
-  }
+  const asignada = new Array(notas.length).fill(false);
+  const historias: Historia[] = [];
 
-  for (let i = 0; i < notas.length; i++) {
-    for (let j = i + 1; j < notas.length; j++) {
-      if (compartidos(tokens[i], tokens[j]) >= TOKENS_COMPARTIDOS) {
-        grupoDe[raiz(j)] = raiz(i);
+  for (const semilla of orden) {
+    if (asignada[semilla]) continue;
+    asignada[semilla] = true;
+    const miembros = [semilla];
+
+    for (const otra of orden) {
+      if (asignada[otra]) continue;
+      if (hablanDelMismoHecho(tokens[semilla], tokens[otra])) {
+        asignada[otra] = true;
+        miembros.push(otra);
       }
     }
+
+    const grupo = miembros.map((i) => notas[i]);
+    const comunes = [...tokens[semilla]].sort().slice(0, 4);
+
+    historias.push({
+      clave: comunes.join("-") || notas[semilla].id,
+      titular: notas[semilla].title,
+      fuentes: [...new Set(grupo.map((n) => n.sourceId))],
+      notas: grupo,
+      urgente: grupo.some((n) => tieneUrgencia(n.title)),
+      respaldoSerio: grupo.some((n) => SECCIONES_SERIAS.has(n.category)),
+    });
   }
 
-  const porRaiz = new Map<number, NotaParaEvaluar[]>();
-  notas.forEach((n, i) => {
-    const r = raiz(i);
-    porRaiz.set(r, [...(porRaiz.get(r) ?? []), n]);
-  });
-
-  return [...porRaiz.values()].map((grupo) => {
-    // El titular que representa la historia es el más antiguo: quien dio la
-    // nota primero suele enunciarla de forma más directa que los seguimientos.
-    const ordenadas = [...grupo].sort((a, b) => +a.publishedAt - +b.publishedAt);
-    const fuentes = [...new Set(grupo.map((n) => n.sourceId))];
-    const comunes = [...tokensSignificativos(ordenadas[0].title)].sort().slice(0, 4);
-
-    return {
-      clave: comunes.join("-"),
-      titular: ordenadas[0].title,
-      fuentes,
-      notas: ordenadas,
-      urgente: grupo.some((n) => tieneUrgencia(n.title)),
-    };
-  });
+  return historias;
 }
 
 /** Una historia merece notificación si la corroboran suficientes medios. */
 export function esImportante(h: Historia): boolean {
-  const minimo = h.urgente ? MIN_FUENTES_CON_URGENCIA : MIN_FUENTES;
-  return h.fuentes.length >= minimo;
+  if (!h.respaldoSerio) return false;
+  if (h.fuentes.length >= MIN_FUENTES) return true;
+
+  // El atajo por urgencia existe para no llegar tarde a un hecho de ruptura,
+  // pero exige que TODA la cobertura venga de secciones serias. Sin esa
+  // condición dejaba pasar cosas como el cierre de una estación del metro por
+  // un desfile: tres medios, marcador de urgencia, y nada que interrumpa el día.
+  const todasSerias = h.notas.every((n) => SECCIONES_SERIAS.has(n.category));
+  return h.urgente && todasSerias && h.fuentes.length >= MIN_FUENTES_CON_URGENCIA;
 }
 
 /** La historia más corroborada de la lista, si alguna califica. */
@@ -166,15 +239,19 @@ export function historiaMasImportante(notas: NotaParaEvaluar[]): Historia | null
  *
  * El umbral es más bajo que el de las notificaciones a propósito: un aviso
  * interrumpe y debe ser excepcional, mientras que encabezar el feed solo ordena
- * lo que el usuario ya decidió mirar. Dos medios bastan para merecer el primer
+ * lo que el usuario ya decidió mirar. Tres medios bastan para merecer el primer
  * vistazo; cuatro, para sonar el teléfono.
+ *
+ * Con dos bastaba se colaba lo viral: un casco de Fórmula 1 que recogieron dos
+ * portadas. Con tres quedan unas cuatro historias por cada 12 horas, que es
+ * justo el máximo que muestra la sección.
  */
 export function historiasDestacadas(
   notas: NotaParaEvaluar[],
-  { minFuentes = 2, max = 4 }: { minFuentes?: number; max?: number } = {},
+  { minFuentes = 3, max = 4 }: { minFuentes?: number; max?: number } = {},
 ): Historia[] {
   return agruparPorHecho(notas)
-    .filter((h) => h.fuentes.length >= minFuentes)
+    .filter((h) => h.respaldoSerio && h.fuentes.length >= minFuentes)
     .sort((a, b) => {
       if (b.fuentes.length !== a.fuentes.length) return b.fuentes.length - a.fuentes.length;
       if (a.urgente !== b.urgente) return a.urgente ? -1 : 1;

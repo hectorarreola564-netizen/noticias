@@ -66,6 +66,7 @@ export async function portadaFor(offset: number, category: string | undefined): 
       title: a.title,
       sourceId: a.sourceId,
       sourceName: a.sourceName,
+      category: a.category,
       publishedAt: a.publishedAt,
     })),
   );

@@ -47,7 +47,7 @@ export async function avisarSiToca(hayNuevas: boolean): Promise<ResultadoAviso> 
   const desde = new Date(Date.now() - HORAS_VENTANA * 60 * 60 * 1000);
   const notas = await prisma.article.findMany({
     where: { publishedAt: { gte: desde } },
-    select: { id: true, title: true, sourceId: true, sourceName: true, publishedAt: true },
+    select: { id: true, title: true, sourceId: true, sourceName: true, category: true, publishedAt: true },
   });
 
   const historia = historiaMasImportante(notas);
